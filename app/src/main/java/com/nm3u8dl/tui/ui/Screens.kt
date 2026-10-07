@@ -582,10 +582,9 @@ private fun BasicText(
 ) {
     BasicTextBase(
         text = text,
-        style = style,
+        style = style.copy(textAlign = textAlign),
         maxLines = 4,
         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-        textAlign = textAlign,
         modifier = modifier,
     )
 }
