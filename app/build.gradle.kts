@@ -1,11 +1,12 @@
+import java.io.File
+import java.net.URI
+import java.security.MessageDigest
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
-
-import java.net.URI
-import java.security.MessageDigest
 
 val vendorAssets = listOf(
     mapOf(
@@ -45,17 +46,24 @@ val fetchVendorAssets by tasks.registering {
             val name = asset["name"]!!
             val url = asset["url"]!!
             val expected = asset["sha256"]!!
-            val destFile = java.io.File(dest, name)
-            fun sha256(f: java.io.File): String {
+            val destFile = File(dest, name)
+            fun sha256(f: File): String {
                 val md = MessageDigest.getInstance("SHA-256")
-                f.inputStream().use { is -> val buf = ByteArray(1 shl 16); while (true) { val n = is.read(buf); if (n < 0) break; md.update(buf, 0, n) } }
+                f.inputStream().use { input ->
+                    val buf = ByteArray(1 shl 16)
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        md.update(buf, 0, n)
+                    }
+                }
                 return md.digest().joinToString("") { "%02x".format(it) }
             }
             if (destFile.exists() && sha256(destFile) == expected) {
                 logger.lifecycle("asset up-to-date: $name")
                 return@forEach
             }
-            val cacheFile = java.io.File(cache, name)
+            val cacheFile = File(cache, name)
             if (!cacheFile.exists() || sha256(cacheFile) != expected) {
                 logger.lifecycle("downloading $name ...")
                 URI(url).toURL().openStream().use { input ->
