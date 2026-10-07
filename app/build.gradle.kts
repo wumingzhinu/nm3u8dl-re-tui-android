@@ -138,12 +138,9 @@ android {
     }
 }
 
-tasks.named("preBuild") {
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
     dependsOn(fetchVendorAssets)
 }
-
-tasks.named("mergeDebugAssets") { dependsOn(fetchVendorAssets) }
-tasks.named("mergeReleaseAssets") { dependsOn(fetchVendorAssets) }
 
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.10.01"))
