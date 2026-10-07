@@ -140,12 +140,14 @@ android {
 
 tasks.matching {
     val n = it.name
-    n.contains("Assets", ignoreCase = true) ||
-        n.contains("Lint", ignoreCase = true) ||
-        n.startsWith("pre") ||
-        n.startsWith("process") ||
-        n.startsWith("merge") ||
-        n.startsWith("package")
+    n != "fetchVendorAssets" && (
+        n.contains("Assets", ignoreCase = true) ||
+            n.contains("Lint", ignoreCase = true) ||
+            n.startsWith("pre") ||
+            n.startsWith("process") ||
+            n.startsWith("merge") ||
+            n.startsWith("package")
+        )
 }.configureEach {
     dependsOn(fetchVendorAssets)
 }
