@@ -14,18 +14,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nm3u8dl.tui.ui.AppViewModel
-import com.nm3u8dl.tui.ui.Event
-import com.nm3u8dl.tui.ui.TerminalApp
+import com.nm3u8dl.tui.ui.TerminalRoot
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val launchUrl = intent?.data?.toString()?.takeIf { it.startsWith("http") }
+        val sharedUrl = intent?.data?.toString()?.takeIf { it.startsWith("http") }
         setContent {
-            val shared: AppViewModel = viewModel()
-            LaunchedEffect(launchUrl) {
-                if (launchUrl != null) shared.onEvent(Event.UrlChanged(launchUrl))
+            val vm: AppViewModel = viewModel(factory = AppViewModel.Factory)
+            LaunchedEffect(sharedUrl) {
+                if (sharedUrl != null) {
+                    vm.onUrlChange(sharedUrl)
+                    vm.probe()
+                }
             }
             Box(
                 modifier = Modifier
@@ -34,7 +36,7 @@ class MainActivity : ComponentActivity() {
                     .statusBarsPadding()
                     .navigationBarsPadding(),
             ) {
-                TerminalApp(vm = shared)
+                TerminalRoot(vm)
             }
         }
     }

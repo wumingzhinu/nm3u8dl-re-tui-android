@@ -6,6 +6,7 @@
 /build/
 /app/build/
 /keystore/
+/app/src/main/assets/native/
 /captures/
 .externalNativeBuild/
 .cxx/
