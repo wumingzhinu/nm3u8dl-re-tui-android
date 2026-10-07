@@ -24,7 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicText as BasicTextBase
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -49,6 +49,7 @@ fun TerminalRoot(vm: AppViewModel) {
     val themeMode = rememberThemeMode()
     val p = paletteFor(themeMode.value)
     val s = vm.state
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -56,7 +57,7 @@ fun TerminalRoot(vm: AppViewModel) {
             .background(p.bg),
     ) {
         TopBar(p, s.status, themeMode.value) {
-            toggleThemeMode(themeMode, LocalContext.current)
+            toggleThemeMode(themeMode, context)
         }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (s.screen) {
@@ -579,7 +580,7 @@ private fun BasicText(
     modifier: Modifier = Modifier,
     textAlign: TextAlign = TextAlign.Start,
 ) {
-    androidx.compose.foundation.text.BasicText(
+    BasicTextBase(
         text = text,
         style = style,
         maxLines = 4,
