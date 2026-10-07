@@ -37,7 +37,7 @@ data class UiState(
     val outDir: String = "",
 )
 
-class AppViewModel(app: Application) : AndroidViewModel(app) {
+class AppViewModel(app: TuiApp) : AndroidViewModel(app) {
 
     private val engine: Engine = app.engine
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
