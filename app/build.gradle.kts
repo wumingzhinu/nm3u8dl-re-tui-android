@@ -23,16 +23,18 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("../keystore/release.jks")
-            storePassword = System.getenv("KEYSTORE_PASSWORD")
-            keyAlias = System.getenv("KEY_ALIAS")
-            keyPassword = System.getenv("KEY_PASSWORD")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "termux-tui-ci"
+            keyAlias = System.getenv("KEY_ALIAS") ?: "nm3u8dl"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "termux-tui-ci"
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            val store = file("../keystore/release.jks")
+            signingConfig = if (store.exists()) signingConfigs.getByName("release")
+            else signingConfigs.getByName("debug")
         }
         debug {
             applicationIdSuffix = ".debug"
