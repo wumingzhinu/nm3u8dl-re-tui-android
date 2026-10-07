@@ -13,6 +13,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import java.io.File
 
 class TuiApp : Application() {
@@ -39,7 +42,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val engine: Engine = app.engine
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    var state = kotlinx.compose.runtime.mutableStateOf(UiState())
+    var state = mutableStateOf(UiState())
         private set
 
     init {

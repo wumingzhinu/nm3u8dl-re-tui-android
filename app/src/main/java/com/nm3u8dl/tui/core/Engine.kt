@@ -145,9 +145,12 @@ class Engine(private val context: Context) {
                     resolution = resolution,
                     extension = o.optString("Extension", ""),
                     segments = o.optInt("SegmentsCount", 0),
-                    encrypted = (o.optJSONObject("Playlist")?.optJSONObject("MediaParts")
-                        ?.optJSONObject(0)?.optJSONArray("MediaSegments")
-                        ?.optJSONObject(0)?.optBoolean("IsEncrypted", false)) ?: false,
+                    encrypted = o.optJSONObject("Playlist")
+                        ?.optJSONArray("MediaParts")
+                        ?.optJSONObject(0)
+                        ?.optJSONArray("MediaSegments")
+                        ?.optJSONObject(0)
+                        ?.optBoolean("IsEncrypted", false) ?: false,
                     roles = roles,
                     selected = false,
                 )
