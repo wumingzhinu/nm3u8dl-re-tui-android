@@ -1,200 +1,560 @@
 package com.nm3u8dl.tui.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.nm3u8dl.tui.core.Track
 
 @Composable
 fun TerminalRoot(vm: AppViewModel) {
-    val s = vm.state.value
+    val themeMode = rememberThemeMode()
+    val p = paletteFor(themeMode.value)
+    val s = vm.state
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Palette.Bg),
+            .background(p.bg),
     ) {
-        StatusBar(s)
-        Box(modifier = Modifier.weight(1f)) {
+        TopBar(p, s.status, themeMode.value) {
+            toggleThemeMode(themeMode, LocalContext.current)
+        }
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (s.screen) {
-                Screen.INPUT, Screen.LOADING -> InputScreen(vm, s)
-                Screen.SELECT -> SelectScreen(vm, s)
-                Screen.DOWNLOADING -> DownloadScreen(vm, s)
-                Screen.DONE, Screen.ERROR -> ResultScreen(vm, s)
+                Screen.INPUT, Screen.LOADING -> InputScreen(vm, s, p)
+                Screen.SELECT -> SelectScreen(vm, s, p)
+                Screen.DOWNLOADING -> DownloadScreen(vm, s, p)
+                Screen.DONE, Screen.ERROR -> ResultScreen(vm, s, p)
             }
         }
-        KeyBar(s, vm)
+        ActionBar(vm, s, p)
     }
 }
 
 @Composable
-private fun StatusBar(s: UiState) {
+private fun TopBar(p: Palette, status: String, mode: ThemeMode, onToggle: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Palette.Bar)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
+            .background(p.surface)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        TermText("N_m3u8DL-RE 终端", Palette.Green, bold = true)
-        TermText(s.status, if (s.screen == Screen.ERROR) Palette.Red else Palette.Amber, bold = true)
+        Column {
+            BasicText(
+                "N_m3u8DL 终端",
+                style = if (p.isTerminal) Type.terminalTitle(p) else Type.label(p).copy(
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    fontSize = androidx.compose.ui.unit.TextUnit(15f, androidx.compose.ui.unit.TextUnitType.Sp),
+                ),
+            )
+            BasicText(
+                status,
+                style = Type.caption(p),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(p.surfaceAlt)
+                .clickable(onClick = onToggle)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+        ) {
+            BasicText(
+                if (mode == ThemeMode.TERMINAL) "TERMINAL" else "MODERN",
+                style = Type.caption(p).copy(color = p.accent),
+            )
+        }
     }
 }
 
 @Composable
-private fun InputScreen(vm: AppViewModel, s: UiState) {
+private fun InputScreen(vm: AppViewModel, s: UiState, p: Palette) {
     val keyboard = LocalSoftwareKeyboardController.current
-    Column(modifier = Modifier.fillMaxSize().padding(10.dp)) {
-        TermLine("把视频页面里的播放链接（.m3u8 / .mpd）粘贴到下面", Palette.Dim)
-        TermLine("", Palette.Fg)
-        TermLine("用法", Palette.Cyan, bold = true)
-        TermLine("  1. 在浏览器里打开视频页面", Palette.Fg)
-        TermLine("  2. 复制 .m3u8 或 .mpd 链接", Palette.Fg)
-        TermLine("  3. 粘贴到下面的输入框", Palette.Fg)
-        TermLine("", Palette.Fg)
-        TermLine("遇到加密视频？先在下方填密钥（KID:KEY 或 KEY）", Palette.Dim)
-        TermLine("", Palette.Fg)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+    ) {
+        StepLabel(p, "第 1 步 / 共 3 步", "粘贴播放链接")
 
-        InputBox(
-            label = "> ",
-            labelColor = Palette.Green,
-            value = s.url,
-            placeholder = "https://example.com/video.m3u8",
-            onChange = vm::onUrlChange,
-            onSubmit = {
+        Spacer(Modifier.height(10.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(p.surface)
+                .border(1.dp, if (s.url.isBlank()) p.outline else p.primary, RoundedCornerShape(12.dp))
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+        ) {
+            if (s.url.isEmpty()) {
+                BasicText(
+                    "https://example.com/video.m3u8",
+                    style = monoStyle(p).copy(color = p.onSurfaceDim),
+                )
+            }
+            BasicTextField(
+                value = s.url,
+                onValueChange = vm::onUrlChange,
+                singleLine = true,
+                textStyle = monoStyle(p).copy(color = p.onSurface),
+                cursorBrush = SolidColor(p.primary),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                keyboardActions = KeyboardActions(onGo = {
+                    keyboard?.hide()
+                    vm.probe()
+                }),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Chip(p, "从剪贴板粘贴", p.accent, Modifier.weight(1f)) {
+                vm.pasteUrl()
+            }
+            Chip(p, "解析链接", p.primary, Modifier.weight(1f)) {
                 keyboard?.hide()
                 vm.probe()
-            },
-        )
-        TermLine("", Palette.Fg)
-        InputBox(
-            label = "key ",
-            labelColor = Palette.Amber,
-            value = s.key,
-            placeholder = "留空表示不需要解密",
-            onChange = vm::onKeyChange,
-            onSubmit = {},
-        )
+            }
+        }
+
+        Spacer(Modifier.height(22.dp))
+
+        BasicText("怎么找链接", monoStyle(p).copy(color = p.onSurface))
+        Spacer(Modifier.height(8.dp))
+        listOf(
+            "1. 浏览器打开视频页面，播放一次",
+            "2. 按 F12 打开开发者工具，切到 Network/网络",
+            "3. 筛选框输入 m3u8 或 mpd",
+            "4. 右键复制它的链接，回到这里粘贴",
+        ).forEach {
+            BasicText(it, monoStyle(p).copy(color = p.onSurfaceDim))
+            Spacer(Modifier.height(4.dp))
+        }
+
+        if (s.screen == Screen.LOADING) {
+            Spacer(Modifier.height(18.dp))
+            BasicText("正在解析，请稍候…", monoStyle(p).copy(color = p.warning))
+        }
+
+        Spacer(Modifier.height(20.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicText("加密视频？", Type.caption(p))
+            Spacer(Modifier.width(6.dp))
+            BasicText(
+                if (s.showAdvanced) "收起" else "点这里",
+                Type.caption(p).copy(color = p.accent),
+                modifier = Modifier.clickable { vm.toggleAdvanced() },
+            )
+        }
+
+        if (s.showAdvanced) {
+            Spacer(Modifier.height(10.dp))
+            AdvancedKeys(s, p, vm)
+        }
     }
 }
 
 @Composable
-private fun InputBox(
-    label: String,
-    labelColor: Color,
-    value: String,
-    placeholder: String,
-    onChange: (String) -> Unit,
-    onSubmit: () -> Unit,
-) {
+private fun AdvancedKeys(s: UiState, p: Palette, vm: AppViewModel) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Palette.Surface)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .clip(RoundedCornerShape(12.dp))
+            .background(p.surface)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TermText(label, labelColor, bold = true)
+        BasicText(
+            "留空 = 不需要解密。绝大多数视频不用填。",
+            Type.caption(p),
+        )
+        KeyField(p, "DASH/CENC 密钥", s.key, vm::onKeyChange, "KID:KEY 或 KEY")
+        KeyField(p, "HLS AES-128 密钥", s.hlsKey, vm::onHlsKeyChange, "清单里没有 key 时才填")
+        KeyField(p, "HLS IV（一般不填）", s.hlsIv, vm::onHlsIvChange, "留空则自动用分片序号")
+    }
+}
+
+@Composable
+private fun KeyField(
+    p: Palette,
+    label: String,
+    value: String,
+    onChange: (String) -> Unit,
+    hint: String,
+) {
+    Column {
+        BasicText(label, Type.caption(p).copy(color = p.onSurface))
+        Spacer(Modifier.height(3.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(p.surfaceAlt)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+        ) {
             if (value.isEmpty()) {
-                TermText(placeholder, Palette.Dim)
+                BasicText(hint, monoStyle(p).copy(color = p.onSurfaceDim, fontSize = monoStyle(p).fontSize * 0.9f))
             }
             BasicTextField(
                 value = value,
                 onValueChange = onChange,
                 singleLine = true,
-                textStyle = TextStyle(
-                    color = Palette.Fg,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                ),
-                cursorBrush = SolidColor(Palette.Green),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                keyboardActions = KeyboardActions(onGo = { onSubmit() }),
-                modifier = Modifier.weight(1f),
+                textStyle = monoStyle(p).copy(color = p.onSurface, fontSize = monoStyle(p).fontSize * 0.9f),
+                cursorBrush = SolidColor(p.primary),
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
 }
 
 @Composable
-private fun SelectScreen(vm: AppViewModel, s: UiState) {
-    val grouped = remember(s.tracks) {
-        s.tracks.groupBy { it.kind }
-    }
-    val flat = remember(s.tracks) { s.tracks }
-
+private fun SelectScreen(vm: AppViewModel, s: UiState, p: Palette) {
+    val keyboard = LocalSoftwareKeyboardController.current
     Column(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Palette.Bg)
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-        ) {
-            TermLine("用 ↑↓ 选择，空格勾选，然后按「下载」", Palette.Cyan)
-            TermLine(
-                "已选 ${s.tracks.count { it.selected }} 条 · 视频 ${grouped["video"]?.size ?: 0} / 音频 ${grouped["audio"]?.size ?: 0} / 字幕 ${grouped["subtitle"]?.size ?: 0}",
-                Palette.Dim,
-            )
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
+            StepLabel(p, "第 2 步 / 共 3 步", "选择画质")
+            Spacer(Modifier.height(4.dp))
+            BasicText(s.probeSummary, Type.caption(p))
         }
 
-        val listState = rememberLazyListState()
-        LaunchedEffect(s.cursor) {
-            if (s.cursor in flat.indices) listState.scrollToItem(s.cursor)
-        }
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.weight(1f).background(Palette.Bg),
+        Row(
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(flat) { t ->
-                TrackRow(t, t.index == s.cursor)
+            Quality.entries.forEach { q ->
+                val active = s.quality == q
+                val bg by animateColorAsState(
+                    if (active) p.primary else p.surface,
+                    tween(150),
+                )
+                val fg = if (active) p.onPrimary else p.onSurface
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(bg)
+                        .border(
+                            1.dp,
+                            if (active) Color.Transparent else p.outline,
+                            RoundedCornerShape(20.dp),
+                        )
+                        .clickable { vm.onQualityChange(q) }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    BasicText(q.label, Type.label(p).copy(color = fg, fontSize = androidx.compose.ui.unit.TextUnit(13f, androidx.compose.ui.unit.TextUnitType.Sp)))
+                }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        val selected = s.tracks.filter { it.selected }
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = 20.dp, end = 20.dp, bottom = 12.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(s.tracks) { t ->
+                TrackCard(t, t.selected, p) { vm.toggleTrackByIndex(t.index) }
+            }
+            item {
+                Spacer(Modifier.height(4.dp))
+                BasicText(
+                    "已选 ${selected.size} 条" + if (selected.isEmpty()) " · 请至少选一条" else "",
+                    Type.caption(p),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun TrackRow(t: Track, focused: Boolean) {
-    val bg = if (focused) Palette.SelBg else Color.Transparent
+private fun TrackCard(t: Track, checked: Boolean, p: Palette, onToggle: () -> Unit) {
+    val accent = when (t.kind) {
+        "video" -> p.info
+        "audio" -> p.accent
+        "subtitle" -> p.primary
+        else -> p.onSurfaceDim
+    }
+    val bg by animateColorAsState(
+        if (checked) p.surface else p.surface.copy(alpha = 0.55f),
+        tween(150),
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(bg)
+            .border(
+                width = if (checked) 1.5.dp else 1.dp,
+                color = if (checked) accent else p.outline,
+                shape = RoundedCornerShape(12.dp),
+            )
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(16.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(if (checked) accent else Color.Transparent)
+                    .border(1.dp, if (checked) accent else p.outline, RoundedCornerShape(4.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (checked) {
+                    BasicText("✓", monoStyle(p).copy(color = p.onPrimary, fontSize = monoStyle(p).fontSize * 0.75f))
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            BasicText(kindLabel(t.kind), monoStyle(p).copy(color = accent, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
+            Spacer(Modifier.width(10.dp))
+            BasicText(
+                t.resolution.ifEmpty { kindLabel(t.kind) },
+                monoStyle(p).copy(color = p.onSurface, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+            )
+            Spacer(Modifier.weight(1f))
+            if (t.encrypted) {
+                BasicText("需解密", monoStyle(p).copy(color = p.danger))
+            }
+        }
+        Spacer(Modifier.height(5.dp))
+        Row {
+            val bits = mutableListOf<String>()
+            if (t.bandwidth > 0) bits += "${t.bandwidth / 1000} Kbps"
+            if (t.language.isNotEmpty() && t.language != "und") bits += t.language
+            if (t.codecs.isNotEmpty()) bits += t.codecs.substringBefore('.').uppercase()
+            if (t.segments > 0) bits += "${t.segments} 片"
+            BasicText(bits.joinToString("  ·  "), monoStyle(p).copy(color = p.onSurfaceDim, fontSize = monoStyle(p).fontSize * 0.85f))
+        }
+    }
+}
+
+@Composable
+private fun DownloadScreen(vm: AppViewModel, s: UiState, p: Palette) {
+    val prog = s.progress
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+    ) {
+        StepLabel(p, "第 3 步 / 共 3 步", "正在下载")
+
+        Spacer(Modifier.height(18.dp))
+
+        val percent = prog?.percent ?: 0f
+        val animated by animateFloatAsState(percent, tween(400))
+
+        BasicText(
+            if (prog != null) "${"%.1f".format(prog.percent)}%" else "准备中…",
+            Type.bigValue(p),
+        )
+
+        Spacer(Modifier.height(10.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(10.dp)
+                .clip(RoundedCornerShape(5.dp))
+                .background(p.surfaceAlt),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(animated.coerceIn(0f, 1f))
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(p.primary),
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        val info = prog?.let {
+            "${it.done}/${it.total} 片   ${it.bytes}   ${it.speed}   剩余 ${it.eta}"
+        } ?: ""
+        BasicText(info, monoStyle(p).copy(color = p.onSurfaceDim))
+
+        Spacer(Modifier.height(20.dp))
+
+        val logState = rememberLazyListState()
+        LaunchedEffect(s.logs.size) {
+            if (s.logs.isNotEmpty()) logState.scrollToItem(s.logs.size - 1)
+        }
+        LazyColumn(state = logState, modifier = Modifier.weight(1f)) {
+            items(s.logs) { line ->
+                BasicText(
+                    line,
+                    monoStyle(p).copy(
+                        color = if (line.startsWith("ERR")) p.danger else p.onSurfaceDim,
+                        fontSize = monoStyle(p).fontSize * 0.85f,
+                    ),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResultScreen(vm: AppViewModel, s: UiState, p: Palette) {
+    val ok = s.screen == Screen.DONE
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Spacer(Modifier.height(40.dp))
+        BasicText(if (ok) "下载完成" else "出错了", Type.bigValue(p).copy(color = if (ok) p.success else p.danger))
+        Spacer(Modifier.height(16.dp))
+        if (ok) {
+            BasicText("文件保存在", Type.caption(p), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            Spacer(Modifier.height(4.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(p.surface)
+                    .padding(12.dp),
+            ) {
+                BasicText(s.outDir, monoStyle(p).copy(color = p.accent), textAlign = TextAlign.Center)
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(p.surface)
+                    .padding(12.dp),
+            ) {
+                BasicText(
+                    s.error ?: "未知错误",
+                    monoStyle(p).copy(color = p.danger),
+                )
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+        BasicText("点下方「返回」继续下一个", Type.caption(p))
+    }
+}
+
+@Composable
+private fun ActionBar(vm: AppViewModel, s: UiState, p: Palette) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(bg)
-            .padding(horizontal = 10.dp, vertical = 1.dp),
+            .background(p.surface)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        TermText(if (t.selected) "[x]" else "[ ]", if (t.selected) Palette.Green else Palette.Dim)
-        TermText(" ${kindLabel(t.kind)} ", kindColor(t.kind))
-        TermText("${pad(t.resolution.ifEmpty { "音频" }, 10)} ", Palette.Fg)
-        TermText("${pad(kbps(t), 8)} ", Palette.Amber)
-        TermText("${pad(t.language, 8)} ", Palette.Cyan)
-        TermText(t.codecs, Palette.Dim)
-        if (t.encrypted) TermText(" 🔒", Palette.Red)
+        when (s.screen) {
+            Screen.INPUT -> {
+                Chip(p, "粘贴", p.accent, Modifier.weight(1f)) { vm.pasteUrl() }
+                Chip(p, "开始解析", p.primary, Modifier.weight(1.4f)) { vm.probe() }
+            }
+            Screen.LOADING -> {
+                BasicText("解析中…", monoStyle(p).copy(color = p.warning), modifier = Modifier.weight(1f))
+            }
+            Screen.SELECT -> {
+                Chip(p, "返回", p.onSurfaceDim, Modifier.weight(1f)) { vm.back() }
+                Chip(
+                    p,
+                    "下载 ${s.tracks.count { it.selected }} 条",
+                    p.primary,
+                    Modifier.weight(2f),
+                ) { vm.download() }
+            }
+            Screen.DOWNLOADING -> {
+                BasicText("正在下载，请勿关闭应用", monoStyle(p).copy(color = p.warning), modifier = Modifier.weight(1f))
+            }
+            Screen.DONE, Screen.ERROR -> {
+                Chip(p, "返回", p.primary, Modifier.weight(1f)) { vm.back() }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StepLabel(p: Palette, step: String, title: String) {
+    Column {
+        BasicText(step, monoStyle(p).copy(color = p.accent, fontSize = monoStyle(p).fontSize * 0.85f))
+        Spacer(Modifier.height(2.dp))
+        BasicText(
+            title,
+            if (p.isTerminal) Type.terminalTitle(p) else Type.label(p).copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                fontSize = androidx.compose.ui.unit.TextUnit(20f, androidx.compose.ui.unit.TextUnitType.Sp),
+                color = p.onSurface,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun Chip(p: Palette, label: String, accent: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(accent)
+            .clickable(onClick = onClick)
+            .padding(vertical = 13.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        BasicText(
+            label,
+            Type.label(p).copy(
+                color = if (p.isTerminal || accent == p.onSurfaceDim) p.bg else Color.White,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            ),
+        )
     }
 }
 
@@ -205,133 +565,26 @@ private fun kindLabel(kind: String) = when (kind) {
     else -> "其他"
 }
 
-private fun kindColor(kind: String) = when (kind) {
-    "video" -> Palette.Magenta
-    "audio" -> Palette.Cyan
-    "subtitle" -> Palette.Blue
-    else -> Palette.Dim
-}
-
-private fun kbps(t: Track): String =
-    if (t.bandwidth > 0) "${t.bandwidth / 1000}K" else "-"
-
-private fun pad(s: String, n: Int): String =
-    if (s.length >= n) s.take(n) else s + " ".repeat(n - s.length)
+@Composable
+private fun monoStyle(p: Palette): TextStyle = TextStyle(
+    fontFamily = if (p.isTerminal) Type.mono else Type.sans,
+    fontSize = androidx.compose.ui.unit.TextUnit(13f, androidx.compose.ui.unit.TextUnitType.Sp),
+    color = p.onSurface,
+)
 
 @Composable
-private fun DownloadScreen(vm: AppViewModel, s: UiState) {
-    Column(modifier = Modifier.fillMaxSize().padding(10.dp)) {
-        val p = s.progress
-        if (p != null) {
-            TermLine("下载进度", Palette.Cyan, bold = true)
-            TermLine(bar(p.percent, 32), Palette.Green, bold = true)
-            TermLine(
-                "${"%.1f".format(p.percent)}%  ${p.done}/${p.total} 分片  ${p.bytes}  ${p.speed}  剩余 ${p.eta}",
-                Palette.Fg,
-            )
-            TermLine("", Palette.Fg)
-        } else {
-            TermLine("正在启动…", Palette.Amber)
-        }
-        TermLine("", Palette.Fg)
-        LogView(s.logs)
-    }
-}
-
-private fun bar(percent: Float, width: Int): String {
-    val filled = ((percent / 100f) * width).toInt().coerceIn(0, width)
-    return "[" + "━".repeat(filled) + " ".repeat(width - filled) + "]"
-}
-
-@Composable
-private fun LogView(logs: List<String>) {
-    val state = rememberLazyListState()
-    LaunchedEffect(logs.size) {
-        if (logs.isNotEmpty()) state.scrollToItem(logs.size - 1)
-    }
-    LazyColumn(state = state, modifier = Modifier.fillMaxSize()) {
-        items(logs) { line ->
-            TermLine(line, if (line.startsWith("ERR")) Palette.Red else Palette.Dim)
-        }
-    }
-}
-
-@Composable
-private fun ResultScreen(vm: AppViewModel, s: UiState) {
-    Column(modifier = Modifier.fillMaxSize().padding(10.dp)) {
-        if (s.screen == Screen.ERROR) {
-            TermLine("出错了", Palette.Red, bold = true)
-            TermLine("", Palette.Fg)
-            TermLine(s.error ?: "未知错误", Palette.Fg)
-        } else {
-            TermLine("下载完成", Palette.Green, bold = true)
-            TermLine("", Palette.Fg)
-            TermLine("文件保存在：", Palette.Fg)
-            TermLine(s.outDir, Palette.Cyan)
-        }
-        TermLine("", Palette.Fg)
-        TermLine("按「返回」继续下载下一个", Palette.Dim)
-    }
-}
-
-@Composable
-private fun KeyBar(s: UiState, vm: AppViewModel) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Palette.Bar),
-        horizontalArrangement = Arrangement.spacedBy(1.dp),
-    ) {
-        when (s.screen) {
-            Screen.INPUT, Screen.LOADING -> {
-                Key("粘贴", Palette.Cyan, Modifier.weight(1f)) { vm.pasteFromClipboard() }
-                Key("开始", Palette.Green, Modifier.weight(2f)) { vm.probe() }
-            }
-            Screen.SELECT -> {
-                Key("↑", Palette.Cyan, Modifier.weight(1f)) { vm.move(-1) }
-                Key("↓", Palette.Cyan, Modifier.weight(1f)) { vm.move(1) }
-                Key("勾选", Palette.Green, Modifier.weight(1f)) { vm.toggleCursor() }
-                Key("最佳", Palette.Magenta, Modifier.weight(1f)) { vm.autoSelectBest() }
-                Key("下载", Palette.Amber, Modifier.weight(2f)) { vm.download() }
-            }
-            Screen.DOWNLOADING -> {
-                Key("运行中…", Palette.Dim, Modifier.fillMaxWidth()) {}
-            }
-            Screen.DONE, Screen.ERROR -> {
-                Key("返回", Palette.Green, Modifier.fillMaxWidth()) { vm.back() }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Key(label: String, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier = modifier
-            .background(Palette.Surface)
-            .clickable(onClick = onClick)
-            .height(46.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        TermText(label, color, bold = true)
-    }
-}
-
-@Composable
-fun TermLine(text: String, color: Color, bold: Boolean = false) {
-    TermText(text, color, bold)
-}
-
-@Composable
-fun TermText(text: String, color: Color, bold: Boolean = false) {
-    BasicText(
+private fun BasicText(
+    text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign = TextAlign.Start,
+) {
+    androidx.compose.foundation.text.BasicText(
         text = text,
-        style = TextStyle(
-            color = color,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
-        ),
-        maxLines = 1,
+        style = style,
+        maxLines = 4,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        textAlign = textAlign,
+        modifier = modifier,
     )
 }

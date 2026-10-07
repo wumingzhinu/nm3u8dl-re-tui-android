@@ -164,6 +164,9 @@ class Engine(private val context: Context) {
         selection: List<Track>,
         outDir: File,
         key: String? = null,
+        hlsKey: String? = null,
+        hlsIv: String? = null,
+        hlsMethod: String? = null,
         onLog: (String) -> Unit = {},
         onProgress: (Progress) -> Unit = {},
     ): Int = withContext(Dispatchers.IO) {
@@ -179,12 +182,24 @@ class Engine(private val context: Context) {
             "--no-config",
             "--no-ansi-color",
         )
-        if (key != null && key.isNotBlank()) {
+        val sharedKey = key?.trim().orEmpty()
+        val hk = hlsKey?.trim().orEmpty()
+        val hi = hlsIv?.trim().orEmpty()
+
+        if (hk.isNotEmpty()) {
+            args.add("--custom-hls-method")
+            args.add(hlsMethod?.trim()?.ifEmpty { "AES_128" } ?: "AES_128")
+            args.add("--custom-hls-key")
+            args.add(hk)
+            if (hi.isNotEmpty()) {
+                args.add("--custom-hls-iv")
+                args.add(hi)
+            }
+        }
+        if (sharedKey.isNotEmpty()) {
             args.add("--decryption-engine")
             args.add("FFMPEG")
-            args.add("--ffmpeg-binary-path")
-            args.add(p.ffmpeg.absolutePath)
-            key.split(",", " ", "\n").filter { it.isNotBlank() }.forEach {
+            sharedKey.split(",", " ", "\n").filter { it.isNotBlank() }.forEach {
                 args.add("--key"); args.add(it.trim())
             }
         }
